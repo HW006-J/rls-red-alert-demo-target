@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { MAX_PROFILE_ID, MIN_PROFILE_ID } from "@/lib/profiles";
 
 export default async function AccountPage() {
   const supabase = await createClient();
@@ -12,16 +13,10 @@ export default async function AccountPage() {
     redirect("/login");
   }
 
-  // A "legitimate" lookup: this page scopes the query to the caller's own
-  // row via owner_id, so it stays correct regardless of what the RLS policy
-  // allows. Contrast this with /profiles/[id], which trusts the id in the
-  // URL and relies entirely on RLS to enforce ownership -- which is exactly
-  // what this demo's broken policy fails to do.
-  const { data: profile } = await supabase
-    .from("account_profiles")
-    .select("public_id, display_name, email")
-    .eq("owner_id", user.id)
-    .maybeSingle();
+  const profileIds = Array.from(
+    { length: MAX_PROFILE_ID - MIN_PROFILE_ID + 1 },
+    (_, i) => MIN_PROFILE_ID + i
+  );
 
   return (
     <div className="card">
@@ -29,30 +24,17 @@ export default async function AccountPage() {
       <p>
         Signed in as <strong>{user.email}</strong>.
       </p>
-
-      {profile ? (
-        <>
-          <p>
-            Your profile lives at{" "}
-            <Link href={`/profiles/${profile.public_id}`}>
-              /profiles/{profile.public_id}
-            </Link>
-            . Open it, then try editing the number in the address bar to see
-            the access-control failure for yourself.
-          </p>
-          <div className="demo-links">
-            {[1, 2, 3, 4, 5].map((id) => (
-              <Link key={id} href={`/profiles/${id}`}>
-                /profiles/{id}
-              </Link>
-            ))}
-          </div>
-        </>
-      ) : (
-        <p className="muted">
-          No demo profile is linked to this account yet.
-        </p>
-      )}
+      <p>
+        Open each profile URL below and compare what comes back to who
+        you&apos;re actually signed in as:
+      </p>
+      <div className="demo-links">
+        {profileIds.map((id) => (
+          <Link key={id} href={`/profiles/${id}`}>
+            /profiles/{id}
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }

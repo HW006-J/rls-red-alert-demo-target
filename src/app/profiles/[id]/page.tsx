@@ -1,6 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import {
+  MAX_PROFILE_ID,
+  MIN_PROFILE_ID,
+  deriveAccessStatus,
+  parseProfileId,
+  type ClientRow,
+} from "@/lib/profiles";
 
 export default async function ProfilePage({
   params,
@@ -8,7 +15,7 @@ export default async function ProfilePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const publicId = Number(id);
+  const publicId = parseProfileId(id);
 
   const supabase = await createClient();
   const {
@@ -19,39 +26,60 @@ export default async function ProfilePage({
     redirect("/login");
   }
 
-  if (!Number.isInteger(publicId)) {
+  if (publicId === null) {
     return (
       <div className="card">
         <h1>Profile</h1>
-        <p className="error-box">&quot;{id}&quot; is not a valid profile id.</p>
+        <p className="error-box">
+          &quot;{id}&quot; is not a valid profile id (expected {MIN_PROFILE_ID}-
+          {MAX_PROFILE_ID}).
+        </p>
       </div>
     );
   }
 
-  // VULNERABLE BY DESIGN: this queries account_profiles using only the
-  // public_id taken straight from the URL. There is no `.eq("owner_id",
-  // user.id)` check here -- the app relies entirely on the database's Row
-  // Level Security policy to enforce that a caller may only read their own
-  // row. The demo's RLS policy on this table grants SELECT to any
-  // authenticated user (see supabase/migrations/004_...), so this call
-  // returns whichever row matches the id in the URL, regardless of who owns
-  // it. That gap between "the app assumes RLS protects this" and "the
-  // policy doesn't actually scope it" is the Broken Object Level
-  // Authorization (BOLA/IDOR) this demo illustrates.
-  const { data: profile, error } = await supabase
-    .from("account_profiles")
-    .select("public_id, owner_id, display_name, email, phone, private_note, created_at")
-    .eq("public_id", publicId)
-    .maybeSingle();
+  // VULNERABLE BY DESIGN. Row Level Security is the only thing standing
+  // between "the row at this position" and "a row this caller is allowed
+  // to see" -- the query below does nothing to enforce ownership itself:
+  //
+  //   - No `.eq("trainer_id", user.id)` filter (step 3: intentionally
+  //     omitted).
+  //   - `.range(offset, offset)` asks Postgres for "whichever row is at
+  //     this position among the rows RLS currently lets this session
+  //     see", ordered deterministically by (created_at, id). It does not
+  //     ask for "row belonging to a specific trainer".
+  //
+  // The demo's live RLS policy on public.clients (see
+  // supabase/migrations/002_add_vulnerable_clients_policy.sql, owned by
+  // the RLS Red Alert / Vibe Fixer pipeline that also seeds this table)
+  // grants SELECT to any authenticated user with `using (true)`, so this
+  // query currently returns all 4 rows regardless of who is asking --
+  // both trainers' own rows, position-independent of ownership. Once that
+  // policy is repaired to `using (auth.uid() = trainer_id)`, the exact
+  // same query only ever sees the caller's own rows, and out-of-range
+  // positions simply return nothing. This page never hardcodes which
+  // index belongs to which trainer -- ownership is decided below by
+  // comparing whatever row came back to the caller's real session.
+  const offset = publicId - 1;
+  const { data, error } = await supabase
+    .from("clients")
+    .select("id, trainer_id, name, email, private_notes, created_at")
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true })
+    .range(offset, offset);
 
-  const isOwnProfile = profile?.owner_id === user.id;
+  const row = (data?.[0] as ClientRow | undefined) ?? null;
+  const status = row ? deriveAccessStatus(row, user.id) : null;
 
   return (
     <div className="card">
       <h1>Profile #{publicId}</h1>
 
       <div className="demo-links">
-        {[1, 2, 3, 4, 5].map((linkId) => (
+        {Array.from(
+          { length: MAX_PROFILE_ID - MIN_PROFILE_ID + 1 },
+          (_, i) => MIN_PROFILE_ID + i
+        ).map((linkId) => (
           <Link
             key={linkId}
             href={`/profiles/${linkId}`}
@@ -64,42 +92,40 @@ export default async function ProfilePage({
 
       {error && <p className="error-box">{error.message}</p>}
 
-      {!error && !profile && (
+      {!error && !row && (
         <p className="muted" style={{ marginTop: "1rem" }}>
-          No profile exists with id {publicId}.
+          No client record is accessible at position {publicId} for your
+          current session. Under the repaired policy this is the expected
+          result for a position that used to hold another trainer&apos;s row.
         </p>
       )}
 
-      {profile && (
+      {row && status && (
         <>
-          {isOwnProfile ? (
-            <span className="badge ok">Your own profile</span>
+          {status === "owned" ? (
+            <span className="badge ok">Authorized — your own client</span>
           ) : (
-            <span className="badge leak">
-              Not your profile — access control failure
-            </span>
+            <span className="badge leak">BROKEN ACCESS CONTROL CONFIRMED</span>
           )}
 
-          {!isOwnProfile && (
+          {status === "foreign" && (
             <p className="error-box" style={{ marginTop: "1rem" }}>
               You are signed in as <strong>{user.email}</strong>, but the
-              server just returned another user&apos;s private record. A
+              server just returned another trainer&apos;s client record. A
               correctly written policy would have scoped this query to rows
-              where <code>owner_id = auth.uid()</code>.
+              where <code>trainer_id = auth.uid()</code>.
             </p>
           )}
 
           <dl className="profile-grid">
-            <dt>Display name</dt>
-            <dd>{profile.display_name}</dd>
+            <dt>Client name</dt>
+            <dd>{row.name}</dd>
             <dt>Email</dt>
-            <dd>{profile.email}</dd>
-            <dt>Phone</dt>
-            <dd>{profile.phone}</dd>
-            <dt>Private note</dt>
-            <dd>{profile.private_note}</dd>
+            <dd>{row.email ?? "—"}</dd>
+            <dt>Private notes</dt>
+            <dd>{row.private_notes ?? "—"}</dd>
             <dt>Created</dt>
-            <dd>{new Date(profile.created_at).toLocaleString()}</dd>
+            <dd>{new Date(row.created_at).toLocaleString()}</dd>
           </dl>
         </>
       )}

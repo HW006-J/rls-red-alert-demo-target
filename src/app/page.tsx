@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { MAX_PROFILE_ID, MIN_PROFILE_ID } from "@/lib/profiles";
 
 export default async function HomePage() {
   const supabase = await createClient();
@@ -12,17 +13,17 @@ export default async function HomePage() {
       <div className="card">
         <h1>Broken Access Control demo</h1>
         <p>
-          This tiny app exists to demonstrate a real{" "}
-          <strong>OWASP Broken Access Control</strong> failure: a Broken
-          Object Level Authorization (<strong>BOLA</strong>) /{" "}
-          Insecure Direct Object Reference (<strong>IDOR</strong>)
-          vulnerability, backed by an actual Postgres database with Row Level
-          Security enabled.
+          This app demonstrates a real <strong>OWASP Broken Access Control
+          </strong> failure: a Broken Object Level Authorization (
+          <strong>BOLA</strong>) / Insecure Direct Object Reference (
+          <strong>IDOR</strong>) vulnerability, backed by the isolated RLS Red
+          Alert demo&apos;s real Postgres database and Row Level Security
+          policies (the same <code>public.clients</code> table and policy
+          that the Vibe Fixer scanner and repair pipeline operate on).
         </p>
         <p className="muted">
-          Every account below is synthetic (<code>*.test</code> email
-          addresses, invented names and notes). Nothing here is a real
-          person.
+          Every account in this environment is synthetic. Nothing here is a
+          real person.
         </p>
       </div>
 
@@ -30,29 +31,30 @@ export default async function HomePage() {
         <h2>Try it yourself</h2>
         <ol>
           <li>
-            Sign in as <strong>Bob</strong> — see the{" "}
-            <Link href="/login">sign-in page</Link> for demo credentials.
+            Sign in as <strong>Bob</strong> (Trainer A) on the{" "}
+            <Link href="/login">sign-in page</Link> using the demo
+            credentials provisioned for this environment.
           </li>
           <li>
-            Visit your own profile at{" "}
-            <code>/profiles/1</code>. This is authorized: it&apos;s Bob&apos;s
-            own account.
+            Visit <code>/profiles/{MIN_PROFILE_ID}</code>. This is one of
+            Bob&apos;s own clients. Authorized.
           </li>
           <li>
-            Now edit the number in the address bar — try{" "}
-            <code>/profiles/2</code>, <code>/profiles/3</code>,{" "}
-            <code>/profiles/4</code>, <code>/profiles/5</code>. The app will
-            happily return other people&apos;s private contact details and
-            notes, even though Bob is not authorized to see them.
+            Now edit the number in the address bar and try every profile
+            from <code>/profiles/{MIN_PROFILE_ID}</code> through{" "}
+            <code>/profiles/{MAX_PROFILE_ID}</code>. Some of them belong to
+            another trainer entirely, yet the app returns their private
+            client records too.
           </li>
         </ol>
         <p>
-          The root cause: the Postgres Row Level Security policy on the
-          demo&apos;s <code>account_profiles</code> table grants{" "}
-          <code>SELECT</code> to any authenticated user, instead of scoping
-          rows to <code>owner_id = auth.uid()</code>. The app itself performs
-          no extra ownership check, so the database happily hands back rows
-          that belong to other users.
+          The root cause: the Postgres Row Level Security policy on{" "}
+          <code>public.clients</code> grants <code>SELECT</code> to any
+          authenticated user, instead of scoping rows to{" "}
+          <code>trainer_id = auth.uid()</code>. This app&apos;s profile page
+          performs no additional ownership check of its own — it queries by
+          position and trusts the database to enforce who may see what. It
+          doesn&apos;t.
         </p>
         {user ? (
           <Link href="/account" className="button">
