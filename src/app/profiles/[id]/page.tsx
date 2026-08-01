@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -75,20 +74,9 @@ export default async function ProfilePage({
     <div className="card">
       <h1>Profile #{publicId}</h1>
 
-      <div className="demo-links">
-        {Array.from(
-          { length: MAX_PROFILE_ID - MIN_PROFILE_ID + 1 },
-          (_, i) => MIN_PROFILE_ID + i
-        ).map((linkId) => (
-          <Link
-            key={linkId}
-            href={`/profiles/${linkId}`}
-            className={linkId === publicId ? "current" : undefined}
-          >
-            /profiles/{linkId}
-          </Link>
-        ))}
-      </div>
+      <p className="muted" style={{ marginTop: "-0.25rem" }}>
+        Try changing the final number in the browser URL from 1 to 2, 3 or 4.
+      </p>
 
       {error && <p className="error-box">{error.message}</p>}
 
