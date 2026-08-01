@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { MAX_PROFILE_ID, MIN_PROFILE_ID } from "@/lib/profiles";
+import { trainerDisplayName } from "@/lib/trainer-label";
 
 export default async function AccountPage() {
   const supabase = await createClient();
@@ -13,28 +13,27 @@ export default async function AccountPage() {
     redirect("/login");
   }
 
-  const profileIds = Array.from(
-    { length: MAX_PROFILE_ID - MIN_PROFILE_ID + 1 },
-    (_, i) => MIN_PROFILE_ID + i
-  );
+  const label = trainerDisplayName(user.email);
 
   return (
     <div className="card">
       <h1>My account</h1>
       <p>
-        Signed in as <strong>{user.email}</strong>.
+        Signed in as{" "}
+        {label ? (
+          <>
+            <strong>{label}</strong> ({user.email})
+          </>
+        ) : (
+          <strong>{user.email}</strong>
+        )}
+        .
       </p>
-      <p>
-        Open each profile URL below and compare what comes back to who
-        you&apos;re actually signed in as:
+      <p className="muted">
+        Visit <code>/profiles/{MIN_PROFILE_ID}</code>, then try changing the
+        final number in the browser URL from {MIN_PROFILE_ID} to{" "}
+        {MIN_PROFILE_ID + 1}, {MAX_PROFILE_ID - 1} or {MAX_PROFILE_ID}.
       </p>
-      <div className="demo-links">
-        {profileIds.map((id) => (
-          <Link key={id} href={`/profiles/${id}`}>
-            /profiles/{id}
-          </Link>
-        ))}
-      </div>
     </div>
   );
 }

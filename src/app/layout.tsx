@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { signOut } from "@/app/actions";
+import { trainerDisplayName } from "@/lib/trainer-label";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -19,6 +20,7 @@ export default async function RootLayout({
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const label = user ? trainerDisplayName(user.email) : null;
 
   return (
     <html lang="en">
@@ -42,7 +44,11 @@ export default async function RootLayout({
           <nav className="topbar-nav">
             {user ? (
               <>
-                <span className="muted">{user.email}</span>
+                <span className="muted">
+                  {label ? <strong>{label}</strong> : null}
+                  {label ? " · " : ""}
+                  {user.email}
+                </span>
                 <Link href="/account">My account</Link>
                 <form action={signOut}>
                   <button type="submit" className="button secondary">

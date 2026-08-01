@@ -175,29 +175,6 @@ main {
   margin: 0;
 }
 
-.demo-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-}
-
-.demo-links a {
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 0.35rem 0.7rem;
-  text-decoration: none;
-  font-size: 0.9rem;
-  color: var(--text);
-  background: var(--surface);
-}
-
-.demo-links a.current {
-  border-color: var(--accent);
-  color: var(--accent);
-  font-weight: 700;
-}
-
 .muted {
   color: var(--muted);
 }
