@@ -56,15 +56,16 @@ export default async function HomePage() {
           position and trusts the database to enforce who may see what. It
           doesn&apos;t.
         </p>
-        {user ? (
-          <Link href="/account" className="button">
-            Go to my account
+        <div className="button-row">
+          <Link href="/profiles/1" className="button">
+            Go to Bob&apos;s profile
           </Link>
-        ) : (
-          <Link href="/login" className="button">
-            Sign in to try it
-          </Link>
-        )}
+          {user && (
+            <Link href="/account" className="button secondary">
+              Go to my account
+            </Link>
+          )}
+        </div>
       </div>
     </>
   );
