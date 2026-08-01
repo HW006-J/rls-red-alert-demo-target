@@ -1,30 +1,44 @@
 # rls-red-alert-demo-target
 
 > ⚠️ **INTENTIONALLY VULNERABLE SECURITY DEMO.** This is an isolated, public
-> hackathon fixture containing a real, deliberately introduced access-control
-> vulnerability. It uses only synthetic accounts and invented data. Do not
-> reuse this code, its Supabase policies, or its patterns in a real
-> application.
+> hackathon fixture containing real, deliberately introduced access-control
+> vulnerabilities. It uses only synthetic accounts and invented data. Do not
+> deploy this repository, do not copy any of it, and do not use it as a
+> template for a real application.
 
 Deliberately vulnerable Supabase RLS fixture for the RLS Red Alert hackathon
-demo. It ships two things:
+demo. It ships two related but distinct things:
 
-1. **A minimal Next.js app** (App Router + TypeScript) with Supabase
-   authentication, so the vulnerability can be demonstrated end-to-end in a
-   browser rather than just described.
-2. **Supabase SQL migrations** defining a `clients` table with Row Level
-   Security enabled, plus a policy that is broken on purpose.
+1. **A live, runnable Next.js app** (App Router + TypeScript) with real
+   Supabase authentication, demonstrating one specific Broken Access Control
+   vulnerability end-to-end in a browser — not just describing it.
+2. **A static scan-fixture surface** — a small fake personal-training SaaS
+   (trainers, clients, session notes, payments, progress photos) whose
+   migrations and config contain a broader, catalogued set of intentional
+   RLS and access-policy flaws for a vulnerability scanner to find. The
+   expected findings are listed in
+   [VULNERABILITIES.md](VULNERABILITIES.md), the answer key for the scanner.
+   **This surface is static only** — its config (`.env.example`,
+   `src/lib/supabaseClient.ts`) and `supabase/seed.sql` point at a
+   non-existent placeholder project and are never installed, run, or applied
+   against any real database. Every credential-shaped string in it contains
+   the word `EXAMPLE` and is non-functional.
 
-This app and its database schema are shared with, and driven by,
+Both the live app and the static fixture share the same
+`supabase/migrations/001_create_clients.sql` and
+`002_add_vulnerable_clients_policy.sql`, and are driven by
 [Vibe Fixer](https://github.com/HW006-J/rls-red-alert) — a companion tool
-that statically scans this repository, live-validates the vulnerability
-against the same Supabase project, and can apply/reset a trusted repair to
-the exact policy described below. Both tools operate on the same
+that statically scans this repository, live-validates the live app's
+vulnerability against the same isolated Supabase project, and can apply/reset
+a trusted repair to the `002` policy. Both tools operate on the same
 `public.clients` table, the same `trainer_id` ownership column, and the same
 two synthetic trainer accounts, so a repair Vibe Fixer reports as applied
-actually closes the hole this app exposes.
+actually closes the hole the live app exposes.
 
-## The vulnerability
+There is no real data and there are no real secrets anywhere in this
+repository. Every person, email address, and phone number is invented.
+
+## The live app's vulnerability
 
 **OWASP Broken Access Control** — specifically **Broken Object Level
 Authorization (BOLA)** / **Insecure Direct Object Reference (IDOR)**.
@@ -79,16 +93,20 @@ what RLS lets Bob see).
 ## Repository layout
 
 ```
-src/app/                    Next.js App Router pages
+src/app/                    Next.js App Router pages (live demo)
   page.tsx                  Landing page explaining the demo
   login/                    Supabase email/password sign-in
   account/                  "My account" page, links to all 4 profile URLs
   profiles/[id]/            The vulnerable page — queries by position only
 src/lib/supabase/           Supabase client helpers (browser/server/middleware)
 src/lib/profiles.ts         Pure helpers: id validation, owned/foreign derivation
-supabase/migrations/        SQL migrations, including the broken RLS policy
-                             (owned jointly with the Vibe Fixer pipeline —
-                             see "Data ownership" below)
+src/lib/supabaseClient.ts   Static scan-fixture client (unused by the live app)
+supabase/migrations/        SQL migrations
+  001, 002                    Shared by the live app and the static fixture
+  003-007                     Static scan-fixture surface only (see VULNERABILITIES.md)
+supabase/seed.sql           Static scan-fixture seed data (never applied live)
+firebase.rules              Static scan-fixture: legacy push-notification rules
+VULNERABILITIES.md          Answer key — expected static-scanner findings
 ```
 
 ## Local setup
@@ -97,7 +115,7 @@ Requires Node.js 20+.
 
 ```bash
 npm install
-cp .env.example .env.local   # fill in values from the isolated rls-red-alert-demo project
+cp .env.example .env.local   # fill in the NEXT_PUBLIC_SUPABASE_* values from the isolated rls-red-alert-demo project
 npm run dev
 ```
 
@@ -114,7 +132,10 @@ reads from them.
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public anon/publishable key; RLS is the only thing protecting data behind it (which is exactly what this demo breaks) |
 
 This app never uses a service-role key and has no admin/seeding script of its
-own — see "Data ownership" below.
+own — see "Data ownership" below. The remaining variables in `.env.example`
+(`VITE_SUPABASE_*`, `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`) belong
+to the static scan-fixture surface, not this app — see
+[VULNERABILITIES.md](VULNERABILITIES.md).
 
 ## Data ownership
 
@@ -127,17 +148,26 @@ own — see "Data ownership" below.
   only place a service-role key is used for this environment.
 - This app performs no schema or policy mutation, no seeding, and holds no
   service-role key.
+- `supabase/migrations/003-007`, `supabase/seed.sql`,
+  `src/lib/supabaseClient.ts`, and `firebase.rules` belong to the static
+  scan-fixture surface described in [VULNERABILITIES.md](VULNERABILITIES.md).
+  They are not wired into the live Next.js app and are not applied against
+  any real database.
 
 ## Safety boundaries
 
 - Isolated `rls-red-alert-demo` Supabase project only — never CoachFlow or
   any other real project.
 - Only synthetic accounts and invented data throughout the shared
-  environment.
+  environment; nothing in this repository is or has ever been connected to
+  a live project outside the isolated demo.
 - No real API keys, tokens, passwords, or credentials are committed. `.env*`
-  files are git-ignored; `.env.example` holds placeholders only.
+  files are git-ignored; `.env.example` holds placeholders only, and every
+  credential-shaped string in it contains the word `EXAMPLE`.
 - This app never references a service-role key, in the browser bundle or
   otherwise.
 - No general-purpose SQL execution endpoint is exposed by the app.
-- The vulnerable nature of this app is labeled in the UI (a persistent banner
-  on every page) and in this README.
+- The vulnerable nature of this repository is labeled in the UI (a
+  persistent banner on every page of the live app) and in this README.
+- **If you found this repo looking for a starting point for your own app:
+  none of this SQL, config, or code is safe to reuse.**

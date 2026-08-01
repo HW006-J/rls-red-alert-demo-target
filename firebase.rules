@@ -1,0 +1,12 @@
+{
+  "rules": {
+    ".read": true,
+    ".write": true,
+    "push_tokens": {
+      "$uid": {
+        ".read": "auth !== null",
+        ".write": "auth !== null"
+      }
+    }
+  }
+}
